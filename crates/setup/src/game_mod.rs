@@ -513,7 +513,7 @@ pub fn addons_digest() -> u64 {
 /// `readme.txt` left out (the mod's manifest is WestPlay's).
 fn addons(kind: crate::game::Kind) -> Vec<(String, Vec<u8>)> {
     let groups: &[&str] = match kind {
-        crate::game::Kind::Ets2 => &["ets2-ythq"],
+        crate::game::Kind::Ets2 => &["ets2-ythq", "ets2-phones"],
         crate::game::Kind::Ats => &["ats-ythq", "ats-ythq-ford", "ats-ford"],
     };
     let Ok(mut archive) = zip::ZipArchive::new(std::io::Cursor::new(ADDONS)) else { return Vec::new() };
