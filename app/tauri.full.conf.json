@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": false,
+    "resources": {
+      "../ui/dist/": "ui/",
+      "../assets/westplay.scs": "westplay.scs",
+      "../target/release/westplay.dll": "westplay.dll",
+      "../target/release/westplay-probe.exe": "westplay-probe.exe",
+      "../target/release/westplay-maps.exe": "westplay-maps.exe",
+      "../qq-music-layer/": "qq-music-layer/",
+      "../netease-layer/": "netease-layer/",
+      "../LICENSE": "LICENSE.txt",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md",
+      "../crates/host/src/radio_hls.LICENSE": "licenses/hls.js.LICENSE"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "installer/hooks.nsh",
+        "displayLanguageSelector": false,
+        "languages": [
+          "English", "Turkish", "German", "French", "Spanish", "SpanishInternational", "Italian", "PortugueseBR",
+          "Portuguese", "Dutch", "Polish", "Russian", "Ukrainian", "Czech", "Slovak", "Bulgarian", "Croatian",
+          "Slovenian", "Serbian", "SerbianLatin", "Macedonian", "Danish", "Swedish", "Norwegian", "Finnish",
+          "Estonian", "Latvian", "Lithuanian", "Hungarian", "Romanian", "Greek", "Catalan", "Basque", "Galician",
+          "Georgian", "Japanese", "Korean", "SimpChinese", "TradChinese", "Vietnamese"
+        ]
+      }
+    }
+  }
+}

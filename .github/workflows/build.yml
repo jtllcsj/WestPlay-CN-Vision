@@ -1,0 +1,65 @@
+name: Build WestPlay (CN-Vision + tablet pack)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Rust (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build frontend
+        shell: pwsh
+        run: |
+          cd ui
+          npm install
+          npm run build:release
+
+      - name: Install Tauri CLI (root)
+        shell: pwsh
+        run: npm install
+
+      - name: Build Rust binaries
+        shell: pwsh
+        run: cargo build --release --workspace
+
+      - name: Fetch QQ-music + NetEase layers from the official installer
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP "WestPlay_3.0.0_x64-setup.exe"
+          Invoke-WebRequest -Uri "https://github.com/LucianLuu/WestPlay-CN-Vision/releases/download/v3.0.0/WestPlay_3.0.0_x64-setup.exe" -OutFile $exe
+          $seven = @("C:\Program Files\7-Zip\7z.exe", "C:\Program Files (x86)\7-Zip\7z.exe", "7z") | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
+          if (-not $seven) { $seven = "7z" }
+          & $seven x -y "-o$env:GITHUB_WORKSPACE" $exe "qq-music-layer" "netease-layer"
+          if (-not (Test-Path (Join-Path $env:GITHUB_WORKSPACE "qq-music-layer"))) {
+            Write-Warning "qq-music-layer was not extracted; the installer will build without QQ Music."
+          }
+          if (-not (Test-Path (Join-Path $env:GITHUB_WORKSPACE "netease-layer"))) {
+            Write-Warning "netease-layer was not extracted; the installer will build without NetEase Music."
+          }
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          cd app
+          node ..\node_modules\@tauri-apps\cli\tauri.js build --config tauri.full.conf.json
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: WestPlay-CN-Vision-tabletpack-installer
+          path: target/release/bundle/nsis/*.exe
