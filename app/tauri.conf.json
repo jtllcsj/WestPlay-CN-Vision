@@ -11,10 +11,7 @@
       "cwd": "../ui",
       "wait": false
     },
-    "beforeBuildCommand": {
-      "script": "npm run build:release",
-      "cwd": "../ui"
-    }
+    "beforeBuildCommand": "echo using the pre-built UI from the official installer"
   },
   "app": {
     "windows": [
