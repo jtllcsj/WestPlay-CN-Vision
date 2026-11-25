@@ -22,35 +22,35 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
 
-      - name: Build frontend
-        shell: pwsh
-        run: |
-          cd ui
-          npm install
-          npm run build:release
-
       - name: Install Tauri CLI (root)
         shell: pwsh
-        run: npm install
+        run: npm install --ignore-scripts
 
-      - name: Build Rust binaries
-        shell: pwsh
-        run: cargo build --release --workspace
-
-      - name: Fetch QQ-music + NetEase layers from the official installer
+      # The author keeps 3.0's UI sources out of the repository (.gitignore: "原作者不再公开"), so the
+      # frontend can't be built from source here. The tablet-pack add-on doesn't change the frontend (it's
+      # Rust only), so the already-built UI and the two Python layers come from the official v3.0.0 installer.
+      # Fetched before the Rust build: `app/build.rs` checks the UI folder Tauri's config names.
+      - name: Fetch prebuilt UI + QQ/NetEase layers from the official installer
         shell: pwsh
         run: |
           $exe = Join-Path $env:RUNNER_TEMP "WestPlay_3.0.0_x64-setup.exe"
           Invoke-WebRequest -Uri "https://github.com/LucianLuu/WestPlay-CN-Vision/releases/download/v3.0.0/WestPlay_3.0.0_x64-setup.exe" -OutFile $exe
           $seven = @("C:\Program Files\7-Zip\7z.exe", "C:\Program Files (x86)\7-Zip\7z.exe", "7z") | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
           if (-not $seven) { $seven = "7z" }
-          & $seven x -y "-o$env:GITHUB_WORKSPACE" $exe "qq-music-layer" "netease-layer"
-          if (-not (Test-Path (Join-Path $env:GITHUB_WORKSPACE "qq-music-layer"))) {
-            Write-Warning "qq-music-layer was not extracted; the installer will build without QQ Music."
-          }
-          if (-not (Test-Path (Join-Path $env:GITHUB_WORKSPACE "netease-layer"))) {
-            Write-Warning "netease-layer was not extracted; the installer will build without NetEase Music."
-          }
+          $out = Join-Path $env:RUNNER_TEMP "westplay-official"
+          & $seven x -y "-o$out" $exe "ui" "qq-music-layer" "netease-layer"
+          if (Test-Path "ui/dist") { Remove-Item "ui/dist" -Recurse -Force }
+          Copy-Item (Join-Path $out "ui") "ui/dist" -Recurse
+          Get-ChildItem "ui/dist" -Recurse -File -Filter "*.orig" | Remove-Item -Force
+          Copy-Item (Join-Path $out "qq-music-layer") "qq-music-layer" -Recurse
+          Copy-Item (Join-Path $out "netease-layer") "netease-layer" -Recurse
+          if (-not (Test-Path "ui/dist/cabin.html")) { throw "the official UI wasn't extracted" }
+          if (-not (Test-Path "qq-music-layer")) { throw "the QQ Music layer wasn't extracted" }
+          if (-not (Test-Path "netease-layer")) { throw "the NetEase layer wasn't extracted" }
+
+      - name: Build Rust binaries (with the tablet-pack add-on)
+        shell: pwsh
+        run: cargo build --release --workspace
 
       - name: Build NSIS installer
         shell: pwsh

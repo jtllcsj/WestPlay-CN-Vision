@@ -1,5 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": "echo using the pre-built UI from the official installer"
+  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
