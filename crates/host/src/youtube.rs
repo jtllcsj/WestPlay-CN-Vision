@@ -975,9 +975,13 @@ pub(crate) fn is_video_id(id: &str) -> bool {
     id.len() == 11 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
-/// `{"type":"youtube","state":{...}}`: how YouTube's player plays (`null`: no YouTube running).
+/// `{"type":"youtube","site":"youtube","state":{...}}`: how YouTube's player plays (`null`: no YouTube running).
+///
+/// `site` is what tells it from Bilibili's (`bilibili.rs`, the same shape over the same app): the
+/// cabin page keeps one `state` per site, so a video that stopped on one isn't read as the other's
+/// (`owner 2026-11-25`).
 pub fn state_message(state: Option<&State>) -> String {
-    serde_json::json!({ "type": "youtube", "state": state }).to_string()
+    serde_json::json!({ "type": "youtube", "site": "youtube", "state": state }).to_string()
 }
 
 /// `{"type":"youtubeAccount","signedIn":…,"avatar":…}`: whether YouTube's page is signed in.
@@ -1169,9 +1173,12 @@ mod tests {
         let state: State = serde_json::from_str(report).unwrap();
         assert_eq!(
             state_message(Some(&state)),
-            r#"{"state":{"ad":false,"audioTrack":null,"audioTracks":[],"author":"Rick Astley","caption":null,"captions":[],"duration":213.0,"live":false,"qualities":[],"quality":"","qualityLabel":"","rate":0.0,"rates":[],"stableVolume":null,"state":1,"time":12.3,"title":"Never Gonna Give You Up","video":"dQw4w9WgXcQ","voiceBoost":null,"volume":100.0},"type":"youtube"}"#
+            r#"{"site":"youtube","state":{"ad":false,"audioTrack":null,"audioTracks":[],"author":"Rick Astley","caption":null,"captions":[],"duration":213.0,"live":false,"qualities":[],"quality":"","qualityLabel":"","rate":0.0,"rates":[],"stableVolume":null,"state":1,"time":12.3,"title":"Never Gonna Give You Up","video":"dQw4w9WgXcQ","voiceBoost":null,"volume":100.0},"type":"youtube"}"#
         );
-        assert_eq!(state_message(None), r#"{"state":null,"type":"youtube"}"#);
+        assert_eq!(
+            state_message(None),
+            r#"{"site":"youtube","state":null,"type":"youtube"}"#
+        );
     }
 
     #[test]

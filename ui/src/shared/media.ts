@@ -12,6 +12,8 @@ export type MusicService =
   | 'qqMusic'
   | 'netease'
   | 'radio'
+  // Bilibili's video, on the same card the music apps get (cover, title, uploader).
+  | 'bilibili'
 
 export interface MediaSource {
   /** Which player it is (`westplay-apple-music`). */

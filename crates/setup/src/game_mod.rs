@@ -121,6 +121,8 @@ const SHOWN_PARTS: &[(&str, ShownPart)] = &[
     ("iveco-sway", ShownPart { left: 0.0025, right: 0.9975, top: 0.0, bottom: 1.0 }),
     ("renault-t-2024", ShownPart { left: 0.005, right: 0.995, top: 0.005, bottom: 0.995 }),
     ("volvo-fh", ShownPart { left: 0.0054, right: 0.9946, top: 0.0055, bottom: 0.9945 }),
+    // The Volvo 9700 DD's centre display leaves 0.32% of the surface out on each edge (interior `gps.tobj`).
+    ("volvo-9700-dd", ShownPart { left: 0.0032, right: 0.9968, top: 0.0032, bottom: 0.9968 }),
 ];
 
 /// A screen of the game's own whose script is a bare window (no "screen on" group): WestPlay's image goes on the part

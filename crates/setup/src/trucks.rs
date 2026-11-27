@@ -139,6 +139,12 @@ pub const TRUCKS: &[Truck] = &[
         source: Source::Any,
         layout: Some("tablet"),
     },
+    Truck {
+        id: "volvo-9700-dd",
+        name: "Volvo 9700 DD",
+        source: Source::Bus("volvo.9700_23"),
+        layout: Some("volvo-9700-dd"),
+    },
 ];
 
 /// ATS's: the trucks whose real counterparts offer CarPlay (owner 2026-10-28; PLAN.md, ATS support), each on its own

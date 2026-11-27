@@ -22,7 +22,8 @@ import type { CabHead, Equalizer, Speaker } from '../../../shared/host'
  * Off for now: in WebView2 an element taken in by `createMediaElementSource` never reaches the speakers —
  * not even wired straight to the destination, with the context `running` and the element `paused: false`,
  * `readyState: 4`, `volume: 0.47` (checked 2026-11-20, by bisection: the plain element plays, the same
- * element through the graph is silent). The graph itself is kept whole: everything it needs is here, and
+ * element through the graph is silent — and again 2026-11-25 on WebView2 158: switching this off left the
+ * app with no sound at all, so it still holds). The graph itself is kept whole: everything it needs is here, and
  * the switch is the one line below. What it needs next is a way to reach the speakers in this browser —
  * a hidden page of its own, as the other players have, which is the shape `cab_sound.js` is written for.
  */

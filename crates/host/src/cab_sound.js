@@ -146,6 +146,33 @@ window.westplayCabSound = (media, say) => {
     }
     for (const [name, value] of Object.entries(values)) listener[name].setTargetAtTime(value, currentTime, 0.03)
   }
+  /**
+   * Whether two speaker lists describe the same cab.
+   *
+   * Compared by what they say, not by being the same array: the host sends a fresh array with
+   * every message, so an identity test (`!==`) never matched and the whole graph was rewired on
+   * every head report — each rewire disconnects the source, heard as the sound cutting out the
+   * moment the driver turns their head (`owner 2026-11-25`: "一转头就会没声音"). NetEase's own copy
+   * of this graph fixed the same thing the same way (`apps/netease/spatial.ts`, owner 2026-11-20).
+   */
+  const sameSpeakers = (a, b) => {
+    if (!a || !b) return a === b
+    if (a.length !== b.length) return false
+    return a.every((speaker, i) => {
+      const other = b[i]
+      return (
+        speaker.channel === other.channel &&
+        speaker.level === other.level &&
+        speaker.delay === other.delay &&
+        speaker.band[0] === other.band[0] &&
+        speaker.band[1] === other.band[1] &&
+        speaker.at[0] === other.at[0] &&
+        speaker.at[1] === other.at[1] &&
+        speaker.at[2] === other.at[2]
+      )
+    })
+  }
+
   const wire = () => {
     const video = media()
     // The sound is the page's own until there are speakers to play it (and a head to hear them), a cab's walls
@@ -173,7 +200,8 @@ window.westplayCabSound = (media, say) => {
     // or the spectrum — was left wired to nothing, silent until the head came: audio stopped
     // entirely on the first song, 2026-11-20).
     const using = speakers && head ? speakers : null
-    if (audio.wired === using) return
+    // By what they say, not by identity (see `sameSpeakers`): the host sends a new array every time.
+    if (audio.wired === using || (audio.wired && using && sameSpeakers(audio.wired, using))) return
     audio.source.disconnect()
     for (const node of audio.nodes) node.disconnect()
     audio.nodes = []

@@ -94,6 +94,22 @@ impl Layer {
     }
 
     /// The port this layer answers on.
+    /// Whether it's still answering: the process is up, and its health route answers.
+    ///
+    /// The host has no other way to know: the layer is a separate process, and one killed by a
+    /// cleaner, by Windows under memory pressure, or by its own error leaves the app asking a port
+    /// that no longer answers — what a player sees as the app failing to load anything, with
+    /// nothing in the log (they restart it by hand: a player's own `.bat` for exactly this,
+    /// 2026-11-25).
+    pub fn is_serving(&mut self) -> bool {
+        match self.child.as_mut() {
+            // Ours: a process that ended is not serving, whatever answers on its port.
+            Some(child) => matches!(child.try_wait(), Ok(None)) && health(self.port).is_some(),
+            // Adopted (a WestPlay already running): the port is all there is to go on.
+            None => health(self.port).is_some(),
+        }
+    }
+
     pub fn port(&self) -> u16 {
         self.port
     }

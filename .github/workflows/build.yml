@@ -28,13 +28,13 @@ jobs:
 
       # The author keeps 3.0's UI sources out of the repository (.gitignore: "原作者不再公开"), so the
       # frontend can't be built from source here. The tablet-pack add-on doesn't change the frontend (it's
-      # Rust only), so the already-built UI and the two Python layers come from the official v3.0.0 installer.
+      # Rust only), so the already-built UI and the two Python layers come from the official v3.0.1 installer.
       # Fetched before the Rust build: `app/build.rs` checks the UI folder Tauri's config names.
       - name: Fetch prebuilt UI + QQ/NetEase layers from the official installer
         shell: pwsh
         run: |
-          $exe = Join-Path $env:RUNNER_TEMP "WestPlay_3.0.0_x64-setup.exe"
-          Invoke-WebRequest -Uri "https://github.com/LucianLuu/WestPlay-CN-Vision/releases/download/v3.0.0/WestPlay_3.0.0_x64-setup.exe" -OutFile $exe
+          $exe = Join-Path $env:RUNNER_TEMP "WestPlay_3.0.1_x64-setup.exe"
+          Invoke-WebRequest -Uri "https://github.com/LucianLuu/WestPlay-CN-Vision/releases/download/v3.0.1/WestPlay_3.0.1_x64-setup.exe" -OutFile $exe
           $seven = @("C:\Program Files\7-Zip\7z.exe", "C:\Program Files (x86)\7-Zip\7z.exe", "7z") | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
           if (-not $seven) { $seven = "7z" }
           $out = Join-Path $env:RUNNER_TEMP "westplay-official"

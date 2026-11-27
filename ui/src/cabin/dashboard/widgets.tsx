@@ -1,6 +1,7 @@
 import { type Backdrop, type Look, useWordsOver, wordsClass } from '../apps/music/contrast'
 import { Crossfade } from '../apps/music/Crossfade'
 import { VideoWidget } from '../apps/youtube/VideoWidget'
+import { command, nextVideo, play, previousVideo, useYouTube } from '../apps/youtube/youtube'
 import {
   LyricsGlyph,
   NextGlyph,
@@ -55,7 +56,7 @@ import { useWallpapers } from '../state/looks'
 import { prepareWallpaper } from '../wallpapers'
 import { nearestCity } from './destination'
 import { photoView } from './photo'
-import { useNowPlaying, useWebAppSource } from './useNowPlaying'
+import { useBilibiliSource, useNowPlaying, useWebAppSource } from './useNowPlaying'
 import { weatherView } from './weather'
 import { WeatherGlyph } from './WeatherGlyph'
 import { EMPTY, useDestinationView, useGuided } from './widgetState'
@@ -68,10 +69,13 @@ import { cabClock } from '../../shared/host'
  */
 export function NowPlayingWidget() {
   const shown = useCabin((state) => state.dashboardWidgets.nowPlaying)
-  const { showing, webApp, spotify, appleMusic, youtubeMusic, qqMusic, netease, player, radio } = useNowPlaying()
+  const { showing, bilibili, webApp, spotify, appleMusic, youtubeMusic, qqMusic, netease, player, radio } = useNowPlaying()
   return (
     <div className={`widget-slot${shown ? ' open' : ''}`}>
       {shown && showing === 'video' && <VideoWidget />}
+      {/* Bilibili's video as a song: its cover, its title and its uploader, with the three buttons —
+          the same card the music apps get (`useBilibiliSource`). */}
+      {shown && showing === 'bilibili' && bilibili && <BilibiliWidget bilibili={bilibili} />}
       {shown && showing === 'webApp' && webApp && <WebAppWidget webApp={webApp} />}
       {shown && showing === 'spotify' && spotify && <SpotifyWidget spotify={spotify} />}
       {shown && showing === 'appleMusic' && appleMusic && <AppleMusicWidget appleMusic={appleMusic} />}
@@ -82,6 +86,35 @@ export function NowPlayingWidget() {
       {shown && showing === 'radio' && radio && <RadioWidget radio={radio} />}
       {shown && showing === null && <MusicWidget source={null} artwork={null} onControl={() => {}} />}
     </div>
+  )
+}
+
+/**
+ * Bilibili's video, drawn as the music apps are: its cover, its title and its uploader on the
+ * Dashboard's card, with play or pause, next and previous — not its picture, which is what the
+ * video app itself is for (owner 2026-11-25).
+ */
+function BilibiliWidget({ bilibili }: { bilibili: NonNullable<ReturnType<typeof useBilibiliSource>> }) {
+  const playing = bilibili.source.status === 'playing'
+  return (
+    <MusicWidget
+      source={bilibili.source}
+      artwork={bilibili.artwork}
+      onOpen={() => {
+        useYouTube.setState({ returnToPlayer: true })
+        go({ type: 'openApp', app: 'youtube' })
+      }}
+      onControl={(action) => {
+        if (action === 'playPause') command({ action: playing ? 'pause' : 'play' }, 'bilibili')
+        else if (action === 'next') {
+          const next = nextVideo()
+          if (next) play(next, false)
+        } else if (action === 'previous') {
+          const before = previousVideo()
+          if (before) play(before, false)
+        }
+      }}
+    />
   )
 }
 

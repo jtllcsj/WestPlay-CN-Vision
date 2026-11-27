@@ -476,6 +476,81 @@ struct QqLayer(std::sync::Mutex<Option<westplay_host::qq_layer::Layer>>);
 /// at the end of the setup closure, ending the layer with it.
 struct NeteaseLayer(std::sync::Mutex<Option<westplay_host::netease_layer::Layer>>);
 
+/// Keeps the two middle layers serving: one that stops answering is started again.
+///
+/// They are separate processes. Nothing told the app when one ended — killed by a cleaner, by
+/// Windows reclaiming memory, or by its own error — and the app went on asking a port that no
+/// longer answered: what a player saw as "网易云音乐/QQ 音乐 无法载入", with nothing in the log.
+/// A player wrote a `.bat` that kills the leftover and starts it again by hand (2026-11-25);
+/// this is the app doing that itself.
+///
+/// Only a layer the app started is restarted (one adopted from a WestPlay already running isn't
+/// ours to end, and its own owner watches it). A layer that fails to come back is left alone: a
+/// broken install would otherwise be started again every minute for as long as the app runs.
+fn watch_layers(app: tauri::AppHandle) {
+    use tauri::Manager;
+    use std::time::Duration;
+
+    /// How often the two are asked, and how long a layer that failed is left alone before the
+    /// next try (a launch that fails takes a while to fail; retrying at that pace forever is noise).
+    const EVERY: Duration = Duration::from_secs(20);
+    const GIVE_UP_AFTER: u32 = 5;
+
+    std::thread::spawn(move || {
+        let mut failures: u32 = 0;
+        loop {
+            std::thread::sleep(EVERY);
+            let Some(resources) = resources_folder(&app) else { continue };
+
+            // QQ Music's (`qq_layer.rs`).
+            if let Some(state) = app.try_state::<QqLayer>() {
+                let Ok(mut kept) = state.0.lock() else { continue };
+                let dead = kept.as_mut().is_some_and(|layer| !layer.is_serving());
+                if dead {
+                    if failures >= GIVE_UP_AFTER {
+                        continue;
+                    }
+                    failures += 1;
+                    westplay_host::log!("[qq layer] stopped answering; starting it again");
+                    *kept = westplay_host::qq_layer::Layer::start(
+                        &westplay_host::qq_layer::folder(&resources),
+                    );
+                    westplay_host::log!(
+                        "[qq layer] restarted: {}",
+                        if kept.is_some() { "serving" } else { "no answer yet" }
+                    );
+                    if kept.is_some() {
+                        failures = 0;
+                    }
+                }
+            }
+
+            // NetEase Cloud Music's (`netease_layer.rs`).
+            if let Some(state) = app.try_state::<NeteaseLayer>() {
+                let Ok(mut kept) = state.0.lock() else { continue };
+                let dead = kept.as_mut().is_some_and(|layer| !layer.is_serving());
+                if dead {
+                    if failures >= GIVE_UP_AFTER {
+                        continue;
+                    }
+                    failures += 1;
+                    westplay_host::log!("[netease layer] stopped answering; starting it again");
+                    *kept = westplay_host::netease_layer::Layer::start(
+                        &westplay_host::netease_layer::folder(&resources),
+                    );
+                    westplay_host::log!(
+                        "[netease layer] restarted: {}",
+                        if kept.is_some() { "serving" } else { "no answer yet" }
+                    );
+                    if kept.is_some() {
+                        failures = 0;
+                    }
+                }
+            }
+        }
+    });
+}
+
 fn main() {
     // Started as administrator only to copy the plugin into the game (setup asked for it): that, and done.
     let args: Vec<String> = std::env::args().collect();
@@ -619,6 +694,8 @@ fn main() {
                 westplay_host::startup::mark(&format!("app: NetEase layer on {}", layer.port()));
             }
             app.manage(NeteaseLayer(std::sync::Mutex::new(netease_layer)));
+            // Both layers watched: one that stops answering is started again (`watch_layers`).
+            watch_layers(app.handle().clone());
             // The tray: the closed window lives here. Its menu shows WestPlay again or quits it for good.
             {
                 use tauri::menu::{Menu, MenuItem};

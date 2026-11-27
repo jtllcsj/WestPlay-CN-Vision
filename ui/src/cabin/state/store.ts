@@ -795,7 +795,9 @@ function receiveHostMessage(now: () => number): (message: HostMessage) => void {
         useCabin.getState().setTruckScreen(!message.open)
         break
       case 'youtube':
-        receiveState(message.state)
+        // Which site reported: YouTube's player and Bilibili's send the same shape, and each one's
+        // state is kept under its own key (a video one stopped is not the other's).
+        receiveState(message.state, message.site ?? 'youtube')
         break
       case 'gameShown':
         useLive.setState({ gameShown: message.shown })

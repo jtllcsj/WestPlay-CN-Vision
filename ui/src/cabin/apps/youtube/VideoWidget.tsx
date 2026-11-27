@@ -15,7 +15,11 @@ const CONTROLS_MS = 3000
 export function VideoWidget() {
   const text = useText()
   const current = useYouTube((store) => store.current)
-  const playing = useYouTube((store) => store.state?.state === 1 && store.state.video === store.current?.video)
+  // What the player showing this video said — its own site's state, not whichever spoke last.
+  const videoSite = useYouTube((store) => store.videoSite)
+  const playing = useYouTube(
+    (store) => store.states[store.videoSite].state?.state === 1 && store.states[store.videoSite].state?.video === store.current?.video,
+  )
   const hasNext = useYouTube((store) => comingUp(store).length > 0)
   const [controls, setControls] = useState(false)
   const [touched, setTouched] = useState(0)
@@ -52,7 +56,7 @@ export function VideoWidget() {
                   onClick={() => {
                     touch()
                     const before = previousVideo()
-                    if (positionNow() > 5 || !before) command({ action: 'seek', seconds: 0 })
+                    if (positionNow() > 5 || !before) command({ action: 'seek', seconds: 0 }, videoSite)
                     else play(before, false)
                   }}
                 >
@@ -64,7 +68,7 @@ export function VideoWidget() {
                   aria-label={playing ? text.pause : text.play}
                   onClick={() => {
                     touch()
-                    command({ action: playing ? 'pause' : 'play' })
+                    command({ action: playing ? 'pause' : 'play' }, videoSite)
                   }}
                 >
                   {playing ? <PauseGlyph /> : <PlayGlyph />}
@@ -87,7 +91,9 @@ export function VideoWidget() {
                 className="yt-widget-full"
                 aria-label={text.youtube.fullScreen}
                 onClick={() => {
-                  // YouTube, opening on the video.
+                  // The app playing it — always `youtube`, the slot both sites live in: `BilibiliApp`
+                  // sets the site as it mounts. Nothing to switch here; `returnToPlayer` is what makes
+                  // it open on this video rather than its front page.
                   useYouTube.setState({ returnToPlayer: true })
                   go({ type: 'openApp', app: 'youtube' })
                 }}

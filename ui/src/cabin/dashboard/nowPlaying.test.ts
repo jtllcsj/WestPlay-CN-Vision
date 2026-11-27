@@ -3,6 +3,7 @@ import { type NowPlayingSource, shownSource } from './nowPlaying'
 
 const none: Record<NowPlayingSource, boolean> = {
   video: false,
+  bilibili: false,
   webApp: false,
   spotify: false,
   appleMusic: false,

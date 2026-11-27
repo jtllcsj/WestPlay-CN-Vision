@@ -56,3 +56,5 @@ vnl               ui/dashboard/volvo_vnl2018_gps.sii
 vnl-new           ui/dashboard/volvo_vnl2025_gps.sii
 # Western Star 57X (every interior), a 1440 x 540 window.
 westernstar-57x   ui/dashboard/westernstar_57x_gps.sii
+# The Coaches DLC's Volvo 9700 DD: its centre screen's script on the factory 1024 x 512 surface.
+volvo-9700-dd     ui/dashboard/volvo_9700_23_gps.sii

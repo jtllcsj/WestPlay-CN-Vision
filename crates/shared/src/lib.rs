@@ -100,6 +100,8 @@ pub fn page_height(index: usize) -> u32 {
         Some("cascadia") => 480,
         Some("vnl") => 768,
         Some("vnl-new") => 720,
+        // The Volvo 9700 DD's centre display measures 14.26 x 7.77 cm on its interior model.
+        Some("volvo-9700-dd") => 697,
         Some("westernstar-57x") => 480,
         _ => SCREEN_HEIGHT,
     }
@@ -311,7 +313,7 @@ const SHARED_LAYOUT_TRUCKS: &[(&str, &[&str])] = &[
 /// The buses' screens WestPlay is on (the Coaches DLC's own, the bus mods' Gps parts): in a bus the WestPlay tablet,
 /// once it's drawn, shows WestPlay instead of them (owner 2026-11-13: players find the buses' screens small; "all
 /// buses, mod ones too").
-const BUS_LAYOUTS: &[&str] = &["ob-gps", "scania-touring", "man-lions-24"];
+const BUS_LAYOUTS: &[&str] = &["ob-gps", "scania-touring", "man-lions-24", "volvo-9700-dd"];
 
 /// Whether the layout at `index` (in [`screen_layouts`]) is a bus's own screen ([`BUS_LAYOUTS`]).
 pub fn bus_layout(index: usize) -> bool {

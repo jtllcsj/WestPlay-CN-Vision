@@ -1252,10 +1252,21 @@ fn create_environment(user_data: &Path, autoplay: bool) -> Result<ICoreWebView2E
     }
     // 诊断用：`WESTPLAY_DEBUG_PORT=9222` 时车机页开远程调试，可以用 CDP 量页面实际布局。
     // 不设这个环境变量就完全不开，发布版不受影响。
+    //
+    // 每个 profile 一个端口：WebView2 的调试端口是按浏览器进程占的，同一端口给两个 profile
+    // 建环境时只有先起的那个能监听，其余的连不上（B 站与车机页各在一个 profile 上）。
+    // `WESTPLAY_DEBUG_PORT_<名字>` 覆盖某个页面的端口，名字取 profile 目录的最后一段。
     if let Ok(port) = std::env::var("WESTPLAY_DEBUG_PORT") {
         if !port.is_empty() {
+            let name = user_data
+                .file_name()
+                .and_then(|it| it.to_str())
+                .unwrap_or("")
+                .to_uppercase()
+                .replace('-', "_");
+            let port = std::env::var(format!("WESTPLAY_DEBUG_PORT_{name}")).unwrap_or(port);
             arguments = format!("{arguments} --remote-allow-origins=* --remote-debugging-port={port}");
-            log!("[debug] the pages' remote debugging is on, port {port}");
+            log!("[debug] the pages' remote debugging is on, port {port} ({name})");
         }
     }
     // SAFETY: the options object is ours and alive; the arguments are a plain string.

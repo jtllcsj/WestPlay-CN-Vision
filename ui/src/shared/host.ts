@@ -239,8 +239,14 @@ export type HostMessage =
   /** The game's weather (`null` when it can't be read: no game, or a game version whose weather the host
    * doesn't know). */
   | { type: 'weather'; weather: GameWeather | null }
-  /** How YouTube's player plays (`null`: YouTube isn't running). */
-  | { type: 'youtube'; state: YouTubeState | null }
+  /**
+   * How the video player plays (`null`: it isn't running). `site` tells the two apart: YouTube's
+   * player and Bilibili's are the same app over the same shell, and each reports this shape from
+   * its own page (`youtube.rs` says `youtube`, `bilibili.rs` says `bilibili`). The cabin page keeps
+   * one `state` per site — without it, a video one of them stopped looked like the other's on the
+   * Dashboard's Now Playing.
+   */
+  | { type: 'youtube'; site?: 'youtube' | 'bilibili'; state: YouTubeState | null }
   /** YouTube's answer to the page's question `id` (a `youtube` command with an `id`). */
   | ({ type: 'youtubeAnswer'; id: number } & YouTubeAnswer)
   /** Whether the game's window shows (`false`: minimised, or on another desktop; in front or not: Lossless

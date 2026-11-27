@@ -1239,27 +1239,49 @@ impl Bilibili {
         // The head first: the speakers' loudness is set from where it is as they're placed.
         if cab.1 != Some(head) && head.is_sound() {
             cab.1 = Some(head);
-            self.pass(&Command::Head { head })?;
+            self.pass_script(&Command::Head { head })?;
         }
         if cab.0.as_ref().map(Option::as_deref) != Some(speakers) {
             let speakers = speakers.map(<[_]>::to_vec);
             cab.0 = Some(speakers.clone());
-            self.pass(&Command::Speakers { speakers })?;
+            self.pass_script(&Command::Speakers { speakers })?;
         }
         let camera = (outside, if outside { (distance * 4.0).round() / 4.0 } else { 0.0 });
         if cab.2 != Some(camera) {
             cab.2 = Some(camera);
-            self.pass(&Command::Outside { on: camera.0, distance: camera.1 })?;
+            self.pass_script(&Command::Outside { on: camera.0, distance: camera.1 })?;
         }
         if cab.3 != Some(equalizer) {
             cab.3 = Some(equalizer);
-            self.pass(&Command::Equalizer { equalizer })?;
+            self.pass_script(&Command::Equalizer { equalizer })?;
         }
         if cab.4 != Some(spectrum) {
             cab.4 = Some(spectrum);
-            self.pass(&Command::Spectrum { on: spectrum })?;
+            self.pass_script(&Command::Spectrum { on: spectrum })?;
         }
         Ok(())
+    }
+
+    /// Passes a command on to Bilibili's page **by running it there** rather than posting it.
+    ///
+    /// `PostWebMessageAsJson` reaches a document's `chrome.webview` listeners, and on this page it
+    /// does not: the page runs Bilibili's own single-page app, which swaps the document's scripts
+    /// as it navigates, and a listener the startup script added is gone with the document that had
+    /// it — measured here with the page's own message counter at 0 while the graph it feeds stayed
+    /// silent (owner 2026-11-25). `ExecuteScript` targets whatever document is current, so the call
+    /// always lands on the graph the page has now.
+    ///
+    /// The command goes through the page's own dispatch (`run`), so the command's shape is the
+    /// same as a posted one.
+    fn pass_script(&self, command: &Command) -> windows::core::Result<()> {
+        let message = serde_json::to_string(command).expect("commands serialise");
+        // The page's `run` is the one `postMessage` would have called; the JSON is embedded as a
+        // literal (`JSON.parse` of a quoted string, so nothing in it can end the script).
+        let script = format!(
+            "window.westplayRun && window.westplayRun({});",
+            serde_json::to_string(&message).expect("a string is JSON")
+        );
+        self.view.run_script(&script, |_| ())
     }
 
     /// Passes a command on to Bilibili's page (held until it's there).
@@ -1400,28 +1422,34 @@ impl Outbox {
     /// The page says it's there: what to post to it, in order (the first time, what was held; after, the
     /// language, the cropping, the volume, the captions and quality, and the video again).
     fn ready(&mut self) -> Vec<String> {
-        if std::mem::replace(&mut self.ready, true) {
+        // 每次都说：`ready` 是页面（新文档）在说话，上一份文档听过的它一句都没听过。
+        // 原来第一次只发 `held` 队列，而 `speakers` 早在 `cab()` 里被发送过就不在队列里了 ——
+        // 页面于是没有扬声器可摆，视频只能平平地放（owner 2026-11-25）。`held` 里的还在它后面
+        // 补上，队列中与缓存重复的不算问题：同一条命令说两遍没有副作用。
+        let _ = std::mem::replace(&mut self.ready, true);
+        // What was held first: those are the things the app asked of this page as it opened, in the
+        // order it asked, and the cached state follows to fill in what the page has no word on.
+        let mut out: Vec<String> = std::mem::take(&mut self.held);
+        out.extend(
             [
-                &self.language,
-                &self.crop,
-                &self.volume,
-                &self.captions,
-                &self.quality,
-                &self.rate,
-                &self.speakers,
-                &self.head,
-                &self.outside,
-                &self.equalizer,
-                &self.spectrum,
-                &self.video,
-            ]
-            .into_iter()
-            .flatten()
-            .cloned()
-            .collect()
-        } else {
-            std::mem::take(&mut self.held)
-        }
+            &self.language,
+            &self.crop,
+            &self.volume,
+            &self.captions,
+            &self.quality,
+            &self.rate,
+            &self.speakers,
+            &self.head,
+            &self.outside,
+            &self.equalizer,
+            &self.spectrum,
+            &self.video,
+        ]
+        .into_iter()
+        .flatten()
+        .cloned(),
+        );
+        out
     }
 }
 
@@ -1453,9 +1481,13 @@ pub(crate) fn is_video_id(id: &str) -> bool {
     id.len() == 12 && id.starts_with("BV") && id.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
-/// `{"type":"youtube","state":{...}}`: how Bilibili's player plays (`null`: no Bilibili running).
+/// `{"type":"youtube","site":"bilibili","state":{...}}`: how Bilibili's player plays (`null`: no Bilibili running).
+///
+/// `site` is what tells the two apart: YouTube's player reports the same shape (`youtube.rs`),
+/// and the cabin page keeps one `state` per site — without it, a video Bilibili stopped playing
+/// looked like YouTube's for the Dashboard's Now Playing (`owner 2026-11-25`).
 pub fn state_message(state: Option<&State>) -> String {
-    serde_json::json!({ "type": "youtube", "state": state }).to_string()
+    serde_json::json!({ "type": "youtube", "site": "bilibili", "state": state }).to_string()
 }
 
 /// `{"type":"youtubeAccount","signedIn":鈥?"avatar":鈥`: whether Bilibili's page is signed in.
@@ -1662,22 +1694,28 @@ mod tests {
         assert_eq!(outbox.send(&volume), None);
         assert_eq!(outbox.send(&load("BV1GJ411x7h7")), None);
         assert_eq!(outbox.send(&Command::Pause), None);
+        // The page is there: it gets what was held, and — because it's a document of its own that
+        // has heard none of this — the speakers and the head it needs for the sound to have a cab
+        // to come from, not only the ones sent before it was there (`ready` is per document).
+        let first = outbox.ready();
         assert_eq!(
-            outbox.ready(),
+            &first[..3],
             [
                 r#"{"action":"volume","percent":40}"#,
                 r#"{"action":"load","video":"BV1GJ411x7h7"}"#,
                 r#"{"action":"pause"}"#
             ]
         );
+        // (`speakers` and `head` are the cab's own, cached only once `cab()` has been told them; a
+        // page that never had a cab gets none, which is what this Outbox alone has.)
         // There: posted at once.
         assert_eq!(outbox.send(&load("BV1GJ411x7h7")).as_deref(), Some(r#"{"action":"load","video":"BV1GJ411x7h7"}"#));
         assert_eq!(outbox.send(&Command::Play).as_deref(), Some(r#"{"action":"play"}"#));
-        // The page loaded again: the volume and the latest video again, nothing else.
-        assert_eq!(
-            outbox.ready(),
-            [r#"{"action":"volume","percent":40}"#, r#"{"action":"load","video":"BV1GJ411x7h7"}"#]
-        );
+        // The page loaded again: the volume and the latest video again, and the cab's speakers with
+        // them (a new document hears none of it from the old one).
+        let again = outbox.ready();
+        assert!(again.iter().any(|line| line == r#"{"action":"volume","percent":40}"#));
+        assert!(again.iter().any(|line| line == r#"{"action":"load","video":"BV1GJ411x7h7"}"#));
         // And the language, once there is one.
         assert!(outbox.send(&Command::Language { code: "tr".into() }).is_some());
         assert_eq!(outbox.ready()[0], r#"{"action":"language","code":"tr"}"#);
@@ -1788,9 +1826,12 @@ mod tests {
         let state: State = serde_json::from_str(report).unwrap();
         assert_eq!(
             state_message(Some(&state)),
-            r#"{"state":{"ad":false,"audioTrack":null,"audioTracks":[],"author":"Rick Astley","caption":null,"captions":[],"duration":213.0,"live":false,"qualities":[],"quality":"","qualityLabel":"","rate":0.0,"rates":[],"stableVolume":null,"state":1,"time":12.3,"title":"Never Gonna Give You Up","video":"BV1GJ411x7h7","voiceBoost":null,"volume":100.0},"type":"youtube"}"#
+            r#"{"site":"bilibili","state":{"ad":false,"audioTrack":null,"audioTracks":[],"author":"Rick Astley","caption":null,"captions":[],"duration":213.0,"live":false,"qualities":[],"quality":"","qualityLabel":"","rate":0.0,"rates":[],"stableVolume":null,"state":1,"time":12.3,"title":"Never Gonna Give You Up","video":"BV1GJ411x7h7","voiceBoost":null,"volume":100.0},"type":"youtube"}"#
         );
-        assert_eq!(state_message(None), r#"{"state":null,"type":"youtube"}"#);
+        assert_eq!(
+            state_message(None),
+            r#"{"site":"bilibili","state":null,"type":"youtube"}"#
+        );
     }
 
     #[test]

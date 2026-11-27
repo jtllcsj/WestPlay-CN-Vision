@@ -25,6 +25,7 @@ export const SCREEN_LAYOUT_IDS = [
   'vnl',
   'vnl-new',
   'westernstar-57x',
+  'volvo-9700-dd',
 ] as const
 
 export type ScreenLayoutId = (typeof SCREEN_LAYOUT_IDS)[number]
@@ -58,6 +59,7 @@ const PAGE_HEIGHTS: Partial<Record<ScreenLayoutId, number>> = {
   'ob-gps': 744,
   'scania-touring': 730,
   'man-lions-24': 784,
+    'volvo-9700-dd': 697,
   'man-tgx-2020': 720,
   'bronco-24': 800,
   'f150-2023': 800,

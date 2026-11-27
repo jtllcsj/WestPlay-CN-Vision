@@ -2614,6 +2614,13 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
             if let Some(player) = &qq_music {
                 let _ = player.cab(truck_speakers, head, outside, distance, equalizer, spectrum);
             }
+            // Bilibili's own client (bilibili.rs), the same way: its page plays the video's sound,
+            // and this is what places it at the truck's speakers rather than in front of the face.
+            // Its `Command::Speakers` / `Head` / `Outside` / `Tone` were wired and tested but never
+            // sent — this list is where every player is told, and it was missing here.
+            if let Some(player) = &bilibili {
+                let _ = player.cab(truck_speakers, head, outside, distance, equalizer, spectrum);
+            }
             // The web app's site (NetEase Cloud Music, Bilibili): its sound through the
             // truck's own speakers too, where the page's stream is one the browser lets out that way (webapp.rs).
             if let Some(player) = &webapp {

@@ -22,10 +22,18 @@ import { previewAnswer } from './preview'
  * in).
  */
 interface YouTubeStore {
-  /** How YouTube's player plays (the host says); `null`: YouTube isn't running. And when it said so
+  /** How the video player plays (the host says); `null`: it isn't running. This is the *current*
+   * site's (`setSite`), which is what the app's own pages draw. And when it said so
    * (`performance.now()`), for the time to run on from there. */
   state: YouTubeState | null
   stateAt: number
+  /**
+   * The state of **each** site, kept apart: YouTube's and Bilibili's are two players, and one
+   * stopping says nothing about the other. The Dashboard's Now Playing needs both — with a single
+   * `state`, whichever site spoke last owned it, and a video that Bilibili was playing read as
+   * stopped the moment YouTube's page said anything (`owner 2026-11-25`).
+   */
+  states: Record<'youtube' | 'bilibili', { state: YouTubeState | null; at: number }>
   /** The video opened last (shown before YouTube's player has it, and after). */
   current: YouTubeVideo | null
   /** Which site `current` is from: YouTube's, or Bilibili's over the same shell (`setSite`). What draws a
@@ -126,6 +134,10 @@ export const useYouTube = create<YouTubeStore>()(
     (): YouTubeStore => ({
       state: null,
       stateAt: 0,
+      states: {
+        youtube: { state: null, at: 0 },
+        bilibili: { state: null, at: 0 },
+      },
       current: null,
       videoSite: 'youtube',
       open: false,
@@ -204,9 +216,9 @@ export function currentSite(): 'youtube' | 'bilibili' {
 }
 
 /** Tells YouTube's player, or YouTube, what to do (or Bilibili's, when that's the site it shows). */
-export function command(command: YouTubeCommand): void {
+export function command(command: YouTubeCommand, to: 'youtube' | 'bilibili' = site): void {
   if (command.action === 'show') shows++
-  postToHost({ type: site, command } as never)
+  postToHost({ type: to, command } as never)
 }
 
 /** How many times the picture has been placed (`show`), to tell whether it was placed again since. */
@@ -325,9 +337,21 @@ let loading: Loading | null = null
 let reported = false
 
 /** What YouTube's player says. It's in the host, and outlives the page: what plays is what it says plays. */
-export function receiveState(state: YouTubeState | null): void {
+/**
+ * What a video player said of itself. `from` is which one: YouTube's or Bilibili's (the host marks
+ * every report with it, `host.ts`). Each is kept under its own key, and `state` — what the app's
+ * own pages draw — is the one from the site being shown (`setSite`).
+ */
+export function receiveState(state: YouTubeState | null, from: 'youtube' | 'bilibili' = currentSite()): void {
   const now = performance.now()
-  useYouTube.setState({ state, stateAt: now })
+  // Every site's own, always: the Dashboard reads both, whichever app the player is in.
+  const states = { ...useYouTube.getState().states, [from]: { state, at: now } }
+  const here = from === currentSite()
+  useYouTube.setState(here ? { state, stateAt: now, states } : { states })
+
+  // The rest is about the page on screen: another site's report says nothing of what it shows.
+  if (!here) return
+
   const { current: shown, open } = useYouTube.getState()
   const followed = follow(shown?.video ?? null, state?.video ?? null, loading, now)
   loading = followed.loading
@@ -402,10 +426,10 @@ function heard(): number {
 }
 
 /** Sets the volume for every video (a volume above none unmutes). */
-export function setVolume(percent: number): void {
+export function setVolume(percent: number, to: 'youtube' | 'bilibili' = site): void {
   const volume = Math.round(Math.min(100, Math.max(0, percent)))
   useYouTube.setState({ volume, muted: volume === 0 })
-  command({ action: 'volume', percent: volume })
+  command({ action: 'volume', percent: volume }, to)
 }
 
 /** Mutes, or brings the volume back. */

@@ -46,6 +46,41 @@ export function useWebAppSource(): { source: MediaSource; artwork: string | null
   }
 }
 
+/**
+ * Bilibili's video, as a song: its title, its uploader, its cover.
+ *
+ * The Dashboard's Now Playing draws a music card for the music apps (cover, title, artist, the
+ * three buttons). A video got the video widget instead — its own picture filling the card. Bilibili's
+ * has a cover and a title like a song's, so it goes the music card's way, as the music apps do
+ * (owner 2026-11-25). YouTube's keeps the picture: its videos are the thing being watched.
+ */
+export function useBilibiliSource(): { source: MediaSource; artwork: string | null } | null {
+  const video = useYouTube((store) => (store.videoSite === 'bilibili' ? store.current : null))
+  const held = useYouTube((store) => store.states.bilibili)
+  if (!video) return null
+  const mine = held.state?.video === video.video ? held.state : null
+  const playing = mine?.state === 1
+  return {
+    artwork: video.thumbnail,
+    source: {
+      id: `westplay-bilibili-${video.video}`,
+      service: 'bilibili',
+      title: video.title,
+      artist: video.channel,
+      album: '',
+      artwork: video.thumbnail,
+      status: playing ? 'playing' : 'paused',
+      // Its player says where the video is, and when it said so (`held.at`): the card's progress.
+      positionMs: Math.round((mine?.time ?? 0) * 1000),
+      positionAt: mine ? Math.round(performance.timeOrigin + held.at) : 0,
+      durationMs: Math.round((mine?.duration ?? 0) * 1000),
+      controls: { playPause: true, next: true, previous: true, shuffle: false, repeat: false },
+      shuffle: null,
+      repeat: null,
+    },
+  }
+}
+
 /** What Now Playing shows (`shownSource`): which player, and each player's own state (the screen showing it
  * draws it its own way: the Dashboard's widget, the Equalizer's track). */
 export function useNowPlaying() {
@@ -56,11 +91,18 @@ export function useNowPlaying() {
   const player = usePlayerSource()
   const qqMusic = useQqMusicSource()
   const netease = useNeteaseSource()
+  const bilibili = useBilibiliSource()
   const radio = useRadioSource()
   const video = useYouTube((store) => store.current)
-  const videoPlaying = useYouTube((store) => store.state?.state === 1 && store.state.video === store.current?.video)
+  // Bilibili's videos go the music card's way (cover and title, the three buttons); YouTube's keep
+  // the picture. `bilibili` above is that same video as a song, so the `video` slot only stands
+  // for YouTube's now.
+  const bilibiliShown = bilibili !== null
+  const videoState = useYouTube((store) => store.states.youtube.state)
+  const videoPlaying = videoState?.state === 1 && videoState.video === video?.video
   const playing = {
-    video: video !== null && videoPlaying,
+    video: video !== null && videoPlaying && !bilibiliShown,
+    bilibili: bilibili?.source.status === 'playing',
     webApp: webApp?.source.status === 'playing',
     spotify: spotify?.source.status === 'playing',
     appleMusic: appleMusic?.source.status === 'playing',
@@ -71,7 +113,8 @@ export function useNowPlaying() {
     radio: radio?.source.status === 'playing',
   }
   const has = {
-    video: video !== null,
+    video: video !== null && !bilibiliShown,
+    bilibili: bilibiliShown,
     webApp: Boolean(webApp),
     spotify: Boolean(spotify),
     appleMusic: Boolean(appleMusic),
@@ -86,7 +129,7 @@ export function useNowPlaying() {
   useEffect(() => {
     if (showing !== null && showingPlays) lastPlayed = showing
   }, [showing, showingPlays])
-  return { showing, playing, webApp, spotify, appleMusic, youtubeMusic, qqMusic, netease, player, radio, video }
+  return { showing, playing, bilibili, webApp, spotify, appleMusic, youtubeMusic, qqMusic, netease, player, radio, video }
 }
 
 /** The track Now Playing shows, as one line of a list draws it (the Equalizer's): its title, who it's by, its

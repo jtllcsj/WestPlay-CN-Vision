@@ -154,6 +154,14 @@ impl Layer {
     }
 
     /// The port it answers on (the page asks it there: `qq_music.rs`).
+    /// Whether it's still answering (see `netease_layer::Layer::is_serving` for why the host has
+    /// to ask): its process is up, and its health route answers.
+    pub fn is_serving(&mut self) -> bool {
+        // Its process up (a layer killed leaves the port dead too, but a process that ended while
+        // something else took its port must not read as ours), and its own health route answering.
+        matches!(self.child.try_wait(), Ok(None)) && ours_is_serving(self.port)
+    }
+
     pub fn port(&self) -> u16 {
         self.port
     }

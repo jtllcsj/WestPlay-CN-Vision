@@ -440,7 +440,135 @@
   // --- Playing ---------------------------------------------------------------------------------------------
 
   /** The page's own video element (Bilibili's player makes one, and keeps it). */
-  const player = () => document.querySelector('#bilibili-player video, .bpx-player-video-wrap video, video')
+  /**
+   * The page's own video element — the one actually playing.
+   *
+   * No bare `video` fallback: the front page and the side bars carry their own (hover previews,
+   * the ranking's autoplaying clips), and `querySelector` answers the first in document order.
+   * Handing one of those to `cab_sound.js` takes it into the graph for good
+   * (`createMediaElementSource` is once per element) while the player's own `<video>` stays
+   * untouched — heard as the video having no sound at all (owner 2026-11-25: "完全没声").
+   *
+   * Among the player's own, the one playing wins: a page switching videos leaves the old element
+   * in place for a moment, paused.
+   */
+  const player = () => {
+    const found = Array.from(
+      document.querySelectorAll(
+        '#bilibili-player video, .bpx-player-video-wrap video, .bpx-player-container video',
+      ),
+    )
+    return found.find((element) => !element.paused) ?? found[0] ?? null
+  }
+
+  // The truck's own speakers (cab_sound.js): the video's sound split as the truck's system
+  // splits it, placed at each speaker around the driver's head, muffled through the cab's walls
+  // when the camera is outside. Without this the video plays as flat stereo in front of the face,
+  // while every other player in the cab comes from the speakers (owner 2026-11-25).
+  //
+  // `player` is a getter, not the element: Bilibili's page remakes its `<video>` on every video
+  // (and on a part of a series), and a new one has to be taken into the graph — a source node
+  // belongs to its own element for good.
+  // The truck's own speakers (`cab_sound.js`, loaded before this script): the video's sound split
+  // to the cab's speakers, each heard from where it sits.
+  //
+  // No gate on `head` being known first: measured on this page, taking the element in before the
+  // head arrives left it silent for good (`createMediaElementSource` is once per element, and the
+  // graph it lands in then has no listener). It plays through the tone and the cab's walls from
+  // the start instead, and the speakers are wired in when the head comes (`cab_sound.js`'s own
+  // `wire`), which is the same thing every other player in the cab does.
+  // The page's player often plays through an element it never puts in the page, or one it takes
+  // out again as the next video loads: what plays is followed as it plays, and only then looked
+  // for in the page. Bilibili's own player does both (its router swaps the player's DOM between a
+  // video and a series' part). The web app's page has had this from the start (`webapp.js`), and
+  // it is why Bilibili had a cab sound there before it had a client of its own.
+  const heard = new Set()
+  const played = HTMLMediaElement.prototype.play
+  HTMLMediaElement.prototype.play = function (...args) {
+    heard.add(this)
+    return played.apply(this, args)
+  }
+
+  /** The page's own media elements, this document's and its frames' (Bilibili's player runs in
+   * one), plus everything ever played, whether or not it is still in the page. */
+  const media = () => {
+    const found = []
+    const walk = (doc, depth) => {
+      if (depth >= 3 || !doc) return
+      for (const one of doc.querySelectorAll('audio, video')) found.push(one)
+      for (const frame of doc.querySelectorAll('iframe')) {
+        let inner = null
+        try {
+          inner = frame.contentDocument
+        } catch {}
+        if (inner) walk(inner, depth + 1)
+      }
+    }
+    walk(document, 0)
+    for (const one of heard) if (!found.includes(one)) found.push(one)
+    return found
+  }
+
+  /** Whether an element can be the video at all: something to play. */
+  const sounding = (one) =>
+    Boolean(one) &&
+    !one.ended &&
+    Boolean(one.srcObject || ((one.currentSrc || one.src) && one.readyState >= 1))
+
+  /** The element the video plays through: the one playing, where the page has more than one (the
+   * front page's hover previews, an advertisement's own). */
+  const playingElement = () => {
+    const playing = [...heard].find((one) => sounding(one) && !one.paused)
+    if (playing) return playing
+    const inPage = media()
+    return (
+      inPage.find((one) => sounding(one) && !one.paused) ??
+      [...heard].filter(sounding).at(-1) ??
+      inPage.find(sounding) ??
+      null
+    )
+  }
+
+  /**
+   * The element the cab's graph may take, or `null` while it may not.
+   *
+   * An element is taken into a graph once and for good (`createMediaElementSource` throws the
+   * second time), and a cross-origin stream taken in without CORS plays through the graph
+   * silently while its own way back is gone. So the test is the web app's own (`webapp.js`'s
+   * `speakable`, which is how Bilibili had a cab sound before it had a client of its own):
+   *
+   *  - no address, or not readable yet → `null`. Bilibili's player fills its `<video>`'s address
+   *    a moment after it starts; taking it in before that spent its one chance on an element with
+   *    nothing to play (`owner 2026-11-25`: "还是没声音").
+   *  - a `blob:` address (the page feeding it itself, MSE — what Bilibili's `dash` plays through)
+   *    → its own origin, fine to take.
+   *  - an element given `crossOrigin` → its host agreed to CORS, fine.
+   *  - same origin → fine.
+   *  - anything else (another site's plain file) → `null`: it plays as the page plays it.
+   */
+  const speakable = (element) => {
+    if (!element || element.mediaKeys) return null
+    const src = element.currentSrc || element.src || ''
+    if (!src || element.readyState < 2) return null
+    if (src.startsWith('blob:') || element.crossOrigin) return element
+    try {
+      if (new URL(src, location.href).origin === location.origin) return element
+    } catch {}
+    return null
+  }
+
+  const cab = window.westplayCabSound
+    ? window.westplayCabSound(
+        () => speakable(playingElement()),
+        (message) => window.chrome?.webview?.postMessage(message),
+      )
+    : null
+  // What the commands below call: `cab_sound.js` hands back the object that takes them
+  // (`outside`, `head`, `equalizer`, `speakers`, `spectrum`), and this page's dispatch looks for it
+  // on `window.westplayCab`.
+  if (cab) window.westplayCab = cab
+  if (cab) window.setInterval(() => cab.tick?.(), 250)
+
 
   /**
    * Starts the page's video, or says it may not.
@@ -1186,10 +1314,33 @@
       location.href = 'https://www.bilibili.com/'
       return
     }
-    if (command.action === 'outside' || command.action === 'head' || command.action === 'equalizer' || command.action === 'spectrum') {
-      // The truck's own sound: `cab_sound.js` has it.
-      if (window.westplayCab && window.westplayCab[command.action]) window.westplayCab[command.action](command)
-      return
+    // The truck's own sound (`cab_sound.js`): each command carries its own shape, and the graph
+    // takes the values, not the message. `speakers` is the array itself — handing the graph the
+    // whole `{action, speakers}` object left it with no speakers to place the sound at, so the
+    // video played plainly with nothing wrong in the log (owner 2026-11-25). YouTube's page has
+    // always split them this way (`youtube.js`); this one passed the message whole.
+    const cab = window.westplayCab
+    if (cab) {
+      if (command.action === 'speakers') {
+        cab.speakers(command.speakers)
+        return
+      }
+      if (command.action === 'outside') {
+        cab.outside(command.on, command.distance)
+        return
+      }
+      if (command.action === 'head') {
+        cab.head(command)
+        return
+      }
+      if (command.action === 'equalizer') {
+        cab.equalizer(command)
+        return
+      }
+      if (command.action === 'spectrum') {
+        cab.spectrum(command.on)
+        return
+      }
     }
     if (DATA.has(command.action)) {
       answer(command)
@@ -1223,7 +1374,15 @@
     }
   }
 
-  window.chrome.webview.addEventListener('message', (event) => run(event.data))
+  window.chrome.webview?.addEventListener?.('message', (event) => run(event.data))
+  // 宿主也能直接调：`PostWebMessageAsJson` 在这页未必到得了（SPA 换文档时监听器随之没了），
+  // 宿主改用 `ExecuteScript` 调这一个同名入口，两条路走的是同一个 `run`。
+  window.westplayRun = (json) => {
+    try {
+      run(typeof json === 'string' ? JSON.parse(json) : json)
+    } catch (error) {
+    }
+  }
   window.chrome.webview.postMessage({ ready: true })
 
   // --- How it plays, reported to the host -------------------------------------------------------------------

@@ -5,6 +5,7 @@ import { BRIGHTNESS_STEP, keybinds, stepped } from './apps/keybinds'
 import { oneAtATime } from './apps/oneAtATime'
 import { pauseSpotifyWithGame, spotifyPlayer } from './apps/spotify/pauseWithGame'
 import { pauseYouTubeWithGame, youtubePlayer } from './apps/youtube/pauseWithGame'
+import { bilibiliPlayer, pauseBilibiliWithGame } from './apps/youtube/bilibiliPlayer'
 import { pauseYouTubeMusicWithGame, youtubeMusicPlayer } from './apps/youtubeMusic/pauseWithGame'
 import { pausePlayerWithGame, playerAppPlayer } from './apps/player/pauseWithGame'
 import { pauseRadioWithGame, radioPlayer } from './apps/radio/pauseWithGame'
@@ -45,6 +46,7 @@ const FOLLOW_POWER = isInHost() || new URLSearchParams(location.search).has('pow
 const PLAYERS = [
   webappPlayer,
   youtubePlayer,
+  bilibiliPlayer,
   spotifyPlayer,
   appleMusicPlayer,
   youtubeMusicPlayer,
@@ -69,6 +71,7 @@ export function CabinApp() {
   // YouTube, Spotify, Apple Music, YouTube Music and Player pause with the game (its menu, tabbing out) and play
   // on after.
   useEffect(() => pauseYouTubeWithGame(), [])
+  useEffect(() => pauseBilibiliWithGame(), [])
   useEffect(() => pauseSpotifyWithGame(), [])
   useEffect(() => pauseAppleMusicWithGame(), [])
   useEffect(() => pauseYouTubeMusicWithGame(), [])
